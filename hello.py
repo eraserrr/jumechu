@@ -2,16 +2,13 @@ from fastapi import FastAPI
 import requests
 
 
-API_URL = "https://cloud.flowiseai.com/api/v1/vector/upsert/81c95462-3c10-4695-b877-e2435ddbd1a3"
+API_URL = "http://localhost:3000/api/v1/prediction/356e2f18-a6b1-4e3d-8638-132f109d4dd2"
 
 # use form data to upload files
 form_data = {
     "files": ('openAITestFile.txt', open('openAITestFile.txt', 'rb'))
 }
-body_data = {
-    "chunkSize": 1,
-    "chunkOverlap": 1,
-}
+body_data = {"question": "complete the sentence (what's wrong ____ _?)"}
 
 def query(form_data, body_data):
     response = requests.post(API_URL, files=form_data, data=body_data)
