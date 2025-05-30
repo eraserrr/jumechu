@@ -21,8 +21,24 @@
 
 가상환경 실행
 
-``$ source .venv/bin/activate``
+```shell
+source .venv/bin/activate
+```
+
+레디스 실행
+
+```shell
+docker run -n redis -p 6379:6379 
+```
+
+flowise 실행
+
+```shell
+npx flowise start 
+```
 
 앱 실행
 
-``$ uvicorn hello:app --reload``
+```shell
+uvicorn hello:app --reload
+```
