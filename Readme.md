@@ -25,10 +25,16 @@
 source .venv/bin/activate
 ```
 
-레디스 실행
+레디스 초기 실행
 
 ```shell
-docker run -n redis -p 6379:6379 
+docker run redis --name redis -p 6379:6379 
+```
+
+레디스 재실행인 경우
+
+```shell
+docker restart redis
 ```
 
 flowise 실행

@@ -1,13 +1,16 @@
+import json
+
 import requests
 
-API_URL = "http://localhost:3000/api/v1/vector/upsert/356e2f18-a6b1-4e3d-8638-132f109d4dd2"
+API_URL = "http://localhost:3000/api/v1/vector/upsert/e50cc8f1-b857-42bf-88b9-acfef345fb24"
 
 # use form data to upload files
 form_data = {
-    "files": ('openAITestFile.txt', open('openAITestFile.txt', 'rb'))
+    "files": ('info.txt', open('document/slowaging01.json', 'rb'))
 }
 
 body_data = {
+    "stopNodeId": "simpleStoreLlamaIndex_0",
     "returnSourceDocuments": True
 }
 
