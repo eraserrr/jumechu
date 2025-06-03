@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 import requests
 
+from util.request.request_body import RequestBody
+
 API_URL = "http://localhost:3000/api/v1/prediction/e50cc8f1-b857-42bf-88b9-acfef345fb24"
 
 form_data = {}
@@ -37,3 +39,15 @@ app = FastAPI()
 def read_hello():
     output = query(form_data, body_data)
     return output
+
+@app.post("/request")
+def request(requestBody: RequestBody):
+    li = requestBody.ingredients
+    with open('util/request/flowise_request_format.txt', 'rb') as file:
+        rf = file.read()
+    rb = str(rf).replace("{li}", ",".join(li))
+
+    response = requests.post(
+        API_URL, files=form_data, data={"question": rb}
+    )
+    return response.json()
