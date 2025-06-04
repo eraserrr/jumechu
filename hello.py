@@ -1,7 +1,13 @@
+import json
+from dataclasses import asdict
+from json import JSONEncoder
+
 from fastapi import FastAPI
 import requests
+from requests import Response
 
 from util.request.request_body import RequestBody
+from util.response.response_body import ResponseBody
 
 API_URL = "http://localhost:3000/api/v1/prediction/e50cc8f1-b857-42bf-88b9-acfef345fb24"
 
@@ -37,8 +43,7 @@ app = FastAPI()
 
 @app.get("/")
 def read_hello():
-    output = query(form_data, body_data)
-    return output
+    return "helloworld"
 
 @app.post("/request")
 def request(requestBody: RequestBody):
@@ -50,4 +55,8 @@ def request(requestBody: RequestBody):
     response = requests.post(
         API_URL, files=form_data, data={"question": rb}
     )
-    return response.json()
+
+    print(response.json())
+    person = ResponseBody(**response.json())
+
+    return person.text
