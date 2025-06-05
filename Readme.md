@@ -28,13 +28,15 @@ source .venv/bin/activate
 레디스 초기 실행
 
 ```shell
+docker pull redis
 docker run redis --name redis -p 6379:6379 
 ```
 
 레디스 재실행인 경우
 
 ```shell
-docker restart redis
+
+is
 ```
 
 flowise 실행
@@ -46,5 +48,5 @@ npx flowise start
 앱 실행
 
 ```shell
-uvicorn hello:app --reload
+uvicorn api_server:app --reload
 ```
