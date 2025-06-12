@@ -32,13 +32,6 @@ docker pull redis
 docker run redis --name redis -p 6379:6379 
 ```
 
-레디스 재실행인 경우
-
-```shell
-
-is
-```
-
 flowise 실행
 
 ```shell
