@@ -1,3 +1,6 @@
+import json
+from collections import OrderedDict
+
 import requests
 from fastapi import FastAPI
 
@@ -22,21 +25,31 @@ def hello():
    return "Hello World!"
 
 @app.post("/request")
-def request(requestBody: RequestBody):
+def request(request_body: RequestBody):
 
-    li = requestBody.ingredients
+    question = get_question(request_body)
 
-    with open('util/request/flowise_request_format.txt', 'r', encoding='utf-8') as file:
+    print(question)
+
+    return chat_ai(dict(question))
+
+
+def get_question(request_body):
+    li = request_body.ingredients
+    with open('util/request/flowise_request_format.json', 'rb') as file:
         rf = file.read()
-    r = str(rf).replace("li", ",".join(li))
 
+    js = json.loads(rf.decode('utf-8'))
+    js["ingredients I have"] = li
+
+    return js
+
+
+def chat_ai(question: dict):
     response = requests.post(
-        API_URL, files={}, data=PredictionRequestBody(question=r).model_dump(exclude_none=True),
+        API_URL, files={}, data=PredictionRequestBody(question=str(question)).model_dump(exclude_none=True),
     )
-
     answer = ResponseBody(**response.json())
-
     if not answer.success:
         return answer.message
-
-    return answer.text
+    return json.loads(answer.text)
