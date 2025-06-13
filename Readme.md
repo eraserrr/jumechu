@@ -13,3 +13,33 @@
 ## 비기능 요구 사항
 - 냉장고 안에 있는 식품을 데이터 베이스에 저장한다
 - 웹 서버만 동작한다 (모바일 불가)
+
+
+
+
+----
+
+가상환경 실행
+
+```shell
+source .venv/bin/activate
+```
+
+레디스 초기 실행
+
+```shell
+docker pull redis
+docker run redis --name redis -p 6379:6379 
+```
+
+flowise 실행
+
+```shell
+npx flowise start 
+```
+
+앱 실행
+
+```shell
+uvicorn api_server:app --reload
+```
