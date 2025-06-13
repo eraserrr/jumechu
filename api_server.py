@@ -1,5 +1,4 @@
 import json
-from collections import OrderedDict
 
 import requests
 from fastapi import FastAPI
@@ -26,30 +25,44 @@ def hello():
 
 @app.post("/request")
 def request(request_body: RequestBody):
-
     question = get_question(request_body)
 
-    print(question)
-
-    return chat_ai(dict(question))
+    return chat_ai(request_body, question)
 
 
 def get_question(request_body):
     li = request_body.ingredients
+
+    if request_body.more:
+        with open('util/request/flowise_request_additional_format.txt', 'rb') as file:
+            rf2: str = file.read().decode('utf-8')
+            return rf2.replace('li', ",".join(request_body.excludeIngredients))
+
     with open('util/request/flowise_request_format.json', 'rb') as file:
         rf = file.read()
 
     js = json.loads(rf.decode('utf-8'))
     js["ingredients I have"] = li
 
-    return js
+    return dict(js)
 
 
-def chat_ai(question: dict):
+def chat_ai(request_body, question):
+    body = PredictionRequestBody(
+        question=str(question),
+        chatId=request_body.chatId if request_body.more else None,
+    ) if request_body.more else PredictionRequestBody(
+        question=str(question),
+    )
+    js = body.model_dump(exclude_none=True)
+
     response = requests.post(
-        API_URL, files={}, data=PredictionRequestBody(question=str(question)).model_dump(exclude_none=True),
+        API_URL, files={}, data=js,
     )
     answer = ResponseBody(**response.json())
     if not answer.success:
         return answer.message
-    return json.loads(answer.text)
+
+    js = json.loads(answer.text)
+
+    return { answer.chatId : js }

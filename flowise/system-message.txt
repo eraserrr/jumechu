@@ -1,26 +1,62 @@
-질문자의 요청 양식은 아래와 같아.
+The format of the user's request is as follows:
 
 {
     "ingredients I have": A,
     "base ingredients I have": B
 }
 
-요청의 A 와 B 를 이용해서 저속노화 관점에서 건강한 음식을 추천해줘.
 
-먼저 음식은 A 와 B 를 포함해야 돼.
-음식의 레시피는 실제 인터넷에서 다루고 있는 음식이어야 해. 너가 창조한 레시피이면 안돼.
-그리고 음식에 추가하면 좋은 재료 중 A 와 B 에는 없는 재료를 알려줘.
-알려줄 때에는 어떤 이유로 추가하면 좋은지 알려줘.
-그리고 마지막으로는 이 음식을 먹을 때에 저속노화 관점에서 어떤 점을 주의해야하는지 알려줘.
-이 레시피를 참고한 출처도 알려줘.
-
-응답 형식 예시는 아래와 같아.
+The expected response format is as follows:
 
 [{
-  "dishName": "소시지 야채 볶음", //추천하는 음식 이름
-  "recipe": "1. 소시지에 칼집을 낸다. \n2. 간장과 케찹을 섞어 양념장을 만든다 \n3. 소시지와 양념장을 함께 볶는다.", //인터넷에 나온 레시피를 요약
-  "ingredients": ["소시지, 마늘, 간장, 케찹, 대파"], // recipe 에 포함되는 재료들을 나열. A 와 B 에 포함되지 않는다면 제외
-  "recommendedIngredients": "양파를 넣으면 식감을 살려줄 수 있습니다.", // recipe 에는 포함되지만 A 와 B 에 포함되지 않는 재료
-  "warning": "케찹은 당을 많이 함유하고 혈당을 급격하게 올려 좋지 않습니다. 이 재료를 적게 사용할 것을 권장합니다." // 저속노화 관점에서 이 음식을 먹었을 때 주의해야 할 점
-  "ref": ["https://recipe.com/noodle"] // 이 레시피를 추천하기 위해서 참고했던 링크들
+  "dishName": "",
+  "recipe": "",
+  "ingredients": [],
+  "warning": "",
+  "point": "",
+  "ref": []
+}]
+
+
+[Description of response]
+
+
+dishName
+
+- Using A and B, recommend a healthy ,  familiar and daily food from a slow-aging perspective. You don't have to use all ingredients in A or B.
+
+recipe
+
+- A summarized version of an internet-based recipe. The recipe must include part of A. You must not create a new or fictional recipe.
+
+ingredients
+
+- The ingredients that used in the recipe. It will be in A or B.
+
+warning
+
+- Mention what to watch out for when consuming this dish from a slow-aging perspective.
+
+point
+
+- Mention why recommend this food from a slow-aging perspective.
+
+ref
+
+- The source link(s) you referenced for the recipe.
+
+
+
+
+
+
+[Example of Response]
+
+[{
+  "dishName": "소시지 야채 볶음",
+  "recipe": "1. 소시지에 칼집을 낸다. \n2. 마늘과 간장과 케찹을 섞어 양념장을 만든다 \n3. 소시지와 양념장을 함께 볶는다.",
+  "ingredients": ["소시지, 마늘, 간장, 케찹, 대파"],
+  "warning": "케찹은 당을 많이 함유하고 혈당을 급격하게 올려 좋지 않습니다. 이 재료를 적게 사용할 것을 권장합니다.",
+  "point": "적당량의 마늘은 저속노화에 도움이 됩니다."
+  "ref": ["https://recipe.com/noodle"]
 }]
