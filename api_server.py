@@ -23,7 +23,29 @@ app = FastAPI()
 def hello():
    return "Hello World!"
 
-@app.post("/request")
+@app.get("/v1/{user_id}/ingredients")
+def get_ingredients(user_id: str):
+    try:
+        with open(f"data/{user_id}_ingredients.json", 'r') as fr:
+            ingredients = json.load(fr)
+    except FileNotFoundError:
+        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
+            ingredients = {}
+            fw.write(json.dumps(ingredients))
+    return ingredients
+
+@app.put("/v1/{user_id}/ingredients")
+def update_ingredients(user_id: str, ingredients: dict):
+    try:
+        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
+            fw.write(json.dumps(ingredients))
+    except FileNotFoundError:
+        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
+            ingredients = {}
+            fw.write(json.dumps(ingredients))
+    return ingredients
+
+@app.post("/v1/request")
 def request(request_body: RequestBody):
     question = get_question(request_body)
 

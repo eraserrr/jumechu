@@ -1,0 +1,35 @@
+###
+POST http://localhost:8000/v1/request
+Content-Type: application/json
+
+{
+  "ingredients": [
+    "샐러리", "토마토", "월계수","양파", "돼지 목살"
+  ]
+}
+
+###
+POST http://localhost:8000/v1/request
+Content-Type: application/json
+
+{
+  "ingredients": [
+    "샐러리", "토마토", "월계수","양파", "돼지 목살"
+  ],
+  "more": true,
+  "chatId": "6d7dd27b-c4aa-460d-abfe-f67bdc25a89f",
+  "excludedIngredients": ["돼지 목살"]
+}
+
+###
+GET http://localhost:8000/v1/yegeo/ingredients
+
+###
+PUT http://localhost:8000/v1/yegeo/ingredients
+Content-Type: application/json
+
+{
+  "ingredients": [
+    "토마토", "바질", "파스타면", "마늘"
+  ]
+}
