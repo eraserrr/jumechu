@@ -38,8 +38,14 @@ flowise 실행
 npx flowise start 
 ```
 
-앱 실행
+api 서버 실행
 
 ```shell
-uvicorn api_server:app --reload
+uvicorn api_server:app --reload --port 8000
+```
+
+flowise 서버 실행
+
+```shell
+uvicorn flowise_server:app --reload --port 8080
 ```

@@ -1,22 +1,14 @@
 import json
+from typing import Any
 
 import requests
+import uvicorn
 from fastapi import FastAPI
 
-from util.request.prediction_request_body import PredictionRequestBody
-from util.request.request_body import RequestBody
-from util.response.prediction_response_body import ResponseBody
+from util.api_uri import FLOWISE_SERVER_API_URL
 from util.base_ingredients import get_base_ingredients
-
-API_URL = "http://localhost:3000/api/v1/prediction/e50cc8f1-b857-42bf-88b9-acfef345fb24"
-
-def query(form_data, body_data):
-    response = requests.post(API_URL,
-                             files=form_data,
-                             data=body_data
-                             )
-    return response.json()
-
+from util.request.flowise_request_body import FlowiseRequestBody
+from util.request.request_body import RequestBody
 
 app = FastAPI()
 
@@ -54,7 +46,7 @@ def update_ingredients(user_id: str, ingredients: dict):
 def request(request_body: RequestBody):
     question = get_question(request_body)
 
-    return chat_ai(request_body, question)
+    return query(request_body, question)
 
 
 def get_question(request_body):
@@ -74,22 +66,22 @@ def get_question(request_body):
     return dict(js)
 
 
-def chat_ai(request_body, question):
-    body = PredictionRequestBody(
+def query(body_data, question):
+    data = FlowiseRequestBody(
         question=str(question),
-        chatId=request_body.chatId if request_body.more else None,
-    ) if request_body.more else PredictionRequestBody(
+        more=body_data.more,
+        chatId=body_data.chatId
+    ) if body_data.more else FlowiseRequestBody(
         question=str(question),
     )
-    js = body.model_dump(exclude_none=True)
 
     response = requests.post(
-        API_URL, files={}, data=js,
+        FLOWISE_SERVER_API_URL,
+        headers={"Content-Type": "application/json"},
+        json=data.model_dump(exclude_none=True),
     )
-    answer = ResponseBody(**response.json())
-    if not answer.success:
-        return answer.message
+    return response.json()
 
-    js = json.loads(answer.text)
 
-    return { answer.chatId : js }
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
