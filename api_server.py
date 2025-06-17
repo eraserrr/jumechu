@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from util.request.prediction_request_body import PredictionRequestBody
 from util.request.request_body import RequestBody
 from util.response.prediction_response_body import ResponseBody
+from util.base_ingredients import get_base_ingredients
 
 API_URL = "http://localhost:3000/api/v1/prediction/e50cc8f1-b857-42bf-88b9-acfef345fb24"
 
@@ -23,7 +24,33 @@ app = FastAPI()
 def hello():
    return "Hello World!"
 
-@app.post("/request")
+@app.get("/base_ingredients")
+def base_ingredients():
+    return get_base_ingredients()
+
+@app.get("/v1/{user_id}/ingredients")
+def get_ingredients(user_id: str):
+    try:
+        with open(f"data/{user_id}_ingredients.json", 'r') as fr:
+            ingredients = json.load(fr)
+    except FileNotFoundError:
+        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
+            ingredients = {}
+            fw.write(json.dumps(ingredients))
+    return ingredients
+
+@app.put("/v1/{user_id}/ingredients")
+def update_ingredients(user_id: str, ingredients: dict):
+    try:
+        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
+            fw.write(json.dumps(ingredients))
+    except FileNotFoundError:
+        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
+            ingredients = {}
+            fw.write(json.dumps(ingredients))
+    return ingredients
+
+@app.post("/v1/request")
 def request(request_body: RequestBody):
     question = get_question(request_body)
 
