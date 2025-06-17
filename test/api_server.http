@@ -30,6 +30,10 @@ Content-Type: application/json
 
 {
   "ingredients": [
-    "토마토", "바질", "파스타면", "마늘"
+    "토마토", "바질", "파스타면", "마늘", "양파"
   ]
 }
+
+
+###
+GET http://localhost:8000/base_ingredients
