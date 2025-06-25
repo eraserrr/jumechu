@@ -1,9 +1,10 @@
 import json
-from typing import Any
 
 import requests
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 
 from util.api_uri import FLOWISE_SERVER_API_URL
 from util.base_ingredients import get_base_ingredients
@@ -12,11 +13,19 @@ from util.request.request_body import RequestBody
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins="http://localhost:3000",            # 허용할 출처
+    allow_credentials=True,           # 쿠키 포함 여부
+    allow_methods=["*"],              # 허용할 HTTP 메소드 (*=모두)
+    allow_headers=["*"],              # 허용할 헤더 (*=모두)
+)
+
 @app.get("/")
 def hello():
    return "Hello World!"
 
-@app.get("/base_ingredients")
+@app.get("/v1/base_ingredients")
 def base_ingredients():
     return get_base_ingredients()
 
@@ -53,8 +62,8 @@ def get_question(request_body):
     li = request_body.ingredients
 
     if request_body.more:
-        with open('util/request/flowise_request_additional_format.txt', 'rb') as file:
-            rf2: str = file.read().decode('utf-8')
+        with open('util/request/flowise_request_additional_format.txt', 'r') as file:
+            rf2: str = file.read()
             return rf2.replace('li', ",".join(request_body.excludeIngredients))
 
     with open('util/request/flowise_request_format.json', 'rb') as file:

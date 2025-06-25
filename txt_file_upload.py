@@ -36,7 +36,6 @@ def query(form_data):
     return response.json()
 
 body_data = {
-    "stopNodeId": "simpleStoreLlamaIndex_0",
     "returnSourceDocuments": True
 }
 
