@@ -2,10 +2,16 @@ import json
 
 import requests
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import and_
+from sqlalchemy import join
 
-
+from database.session import async_session
+from entity.ingredient import Ingredient
+from entity.user import User
 from util.api_uri import FLOWISE_SERVER_API_URL
 from util.base_ingredients import get_base_ingredients
 from util.request.flowise_request_body import FlowiseRequestBody
@@ -13,9 +19,13 @@ from util.request.request_body import RequestBody
 
 app = FastAPI()
 
+async def get_db():
+    async with async_session() as session:
+        yield session
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins="http://localhost:3000",            # 허용할 출처
+    allow_origins="http://localhost:3030",            # 허용할 출처
     allow_credentials=True,           # 쿠키 포함 여부
     allow_methods=["*"],              # 허용할 HTTP 메소드 (*=모두)
     allow_headers=["*"],              # 허용할 헤더 (*=모두)
@@ -30,8 +40,16 @@ def base_ingredients():
     return get_base_ingredients()
 
 @app.get("/v1/{user_id}/ingredients")
-def get_ingredients(user_id: str):
+async def get_ingredients(user_id: str, db: AsyncSession = Depends(get_db)):
     try:
+        result = await db.execute(
+            select(Ingredient)
+            .where(and_(User.user_name == user_id))
+            .select_from(join(User, Ingredient, User.id == Ingredient.user_id))
+        )
+        scalars = result.scalars().all()
+        print(scalars)
+
         with open(f"data/{user_id}_ingredients.json", 'r') as fr:
             ingredients = json.load(fr)
     except FileNotFoundError:
@@ -41,8 +59,17 @@ def get_ingredients(user_id: str):
     return ingredients
 
 @app.put("/v1/{user_id}/ingredients")
-def update_ingredients(user_id: str, ingredients: dict):
+async def update_ingredients(user_id: str, ingredients: dict, db: AsyncSession = Depends(get_db)):
     try:
+        stmt = await db.execute(
+            select(User).where(and_(User.user_name == user_id))
+        )
+        user = stmt.scalar()
+
+        for ingredient in ingredients:
+            db.add(Ingredient(user_id = user.name, ingredient_name = ingredient))
+            await db.commit()
+
         with open(f"data/{user_id}_ingredients.json", 'w') as fw:
             fw.write(json.dumps(ingredients))
     except FileNotFoundError:

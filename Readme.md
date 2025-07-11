@@ -35,7 +35,7 @@ docker run redis --name redis -p 6379:6379
 flowise 실행
 
 ```shell
-npx flowise start 
+npx flowise start
 ```
 
 api 서버 실행
