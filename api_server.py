@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_
 from sqlalchemy import join
+from sqlalchemy import delete
 
 from database.session import async_session
 from entity.ingredient import Ingredient
@@ -41,41 +42,30 @@ def base_ingredients():
 
 @app.get("/v1/{user_id}/ingredients")
 async def get_ingredients(user_id: str, db: AsyncSession = Depends(get_db)):
-    try:
-        result = await db.execute(
-            select(Ingredient)
-            .where(and_(User.user_name == user_id))
-            .select_from(join(User, Ingredient, User.id == Ingredient.user_id))
-        )
-        scalars = result.scalars().all()
-        print(scalars)
+    result = await db.execute(
+        select(Ingredient)
+        .where(and_(User.user_name == user_id))
+        .select_from(join(User, Ingredient, User.id == Ingredient.user_id))
+    )
+    scalars = result.scalars().all()
+    print(scalars)
 
-        with open(f"data/{user_id}_ingredients.json", 'r') as fr:
-            ingredients = json.load(fr)
-    except FileNotFoundError:
-        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
-            ingredients = {}
-            fw.write(json.dumps(ingredients))
-    return ingredients
+    return {'ingredients': [Ingredient(id=scalar.id, user_id=scalar.user_id, ingredient_name=scalar.ingredient_name) for scalar in scalars]}
 
 @app.put("/v1/{user_id}/ingredients")
 async def update_ingredients(user_id: str, ingredients: dict, db: AsyncSession = Depends(get_db)):
-    try:
-        stmt = await db.execute(
-            select(User).where(and_(User.user_name == user_id))
-        )
-        user = stmt.scalar()
+    stmt = await db.execute(
+        select(User).where(and_(User.user_name == user_id))
+    )
+    user = stmt.scalar()
 
-        for ingredient in ingredients:
-            db.add(Ingredient(user_id = user.name, ingredient_name = ingredient))
-            await db.commit()
+    await db.execute(delete(Ingredient).where(Ingredient.user_id == user.id))
+    await db.commit()
 
-        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
-            fw.write(json.dumps(ingredients))
-    except FileNotFoundError:
-        with open(f"data/{user_id}_ingredients.json", 'w') as fw:
-            ingredients = {}
-            fw.write(json.dumps(ingredients))
+    for ingredient in ingredients["ingredients"]:
+        db.add(Ingredient(user_id = user.id, ingredient_name = ingredient['ingredientName']))
+        await db.commit()
+
     return ingredients
 
 @app.post("/v1/request")
