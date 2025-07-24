@@ -27,7 +27,7 @@ dishName
 
 recipe
 
-- A summarized version of an internet-based recipe. The recipe must include part of A. You must not create a new or fictional recipe.
+- The recipe of the dish.
 
 ingredients
 
@@ -60,3 +60,8 @@ ref
   "point": "적당량의 마늘은 저속노화에 도움이 됩니다."
   "ref": ["https://recipe.com/noodle"]
 }]
+
+The language is korean
+
+
+The dish must be an real-life dish. If the proper dish don't exist (based on the request), then answer the random health dish.
