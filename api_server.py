@@ -48,7 +48,6 @@ async def get_ingredients(user_id: str, db: AsyncSession = Depends(get_db)):
         .select_from(join(User, Ingredient, User.id == Ingredient.user_id))
     )
     scalars = result.scalars().all()
-    print(scalars)
 
     return {'ingredients': [Ingredient(id=scalar.id, user_id=scalar.user_id, ingredient_name=scalar.ingredient_name) for scalar in scalars]}
 
@@ -63,10 +62,18 @@ async def update_ingredients(user_id: str, ingredients: dict, db: AsyncSession =
     await db.commit()
 
     for ingredient in ingredients["ingredients"]:
-        db.add(Ingredient(user_id = user.id, ingredient_name = ingredient['ingredientName']))
+        db.add(Ingredient(user_id = user.id, ingredient_name = ingredient))
         await db.commit()
 
-    return ingredients
+    result = await db.execute(
+        select(Ingredient)
+        .where(and_(User.user_name == user_id))
+        .select_from(join(User, Ingredient, User.id == Ingredient.user_id))
+    )
+
+    scalars = result.scalars().all()
+
+    return {'ingredients': [Ingredient(id=scalar.id, user_id=scalar.user_id, ingredient_name=scalar.ingredient_name) for scalar in scalars]}
 
 @app.post("/v1/request")
 def request(request_body: RequestBody):
