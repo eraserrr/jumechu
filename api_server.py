@@ -13,9 +13,9 @@ from sqlalchemy import delete
 from database.session import async_session
 from entity.ingredient import Ingredient
 from entity.user import User
-from util.api_uri import FLOWISE_SERVER_API_URL
+from util.api_uri import AGENT_SERVER_API_URL
 from util.base_ingredients import get_base_ingredients
-from util.request.flowise_request_body import FlowiseRequestBody
+from util.request.agent_request_body import AgentRequestBody
 from util.request.request_body import RequestBody
 
 app = FastAPI()
@@ -26,7 +26,7 @@ async def get_db():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins="http://localhost:3030",            # 허용할 출처
+    allow_origins="*",            # 허용할 출처
     allow_credentials=True,           # 쿠키 포함 여부
     allow_methods=["*"],              # 허용할 HTTP 메소드 (*=모두)
     allow_headers=["*"],              # 허용할 헤더 (*=모두)
@@ -86,11 +86,11 @@ def get_question(request_body):
     li = request_body.ingredients
 
     if request_body.more:
-        with open('util/request/flowise_request_additional_format.txt', 'r') as file:
+        with open('util/request/agent_request_additional_format.txt', 'r') as file:
             rf2: str = file.read()
             return rf2.replace('li', ",".join(request_body.excludeIngredients))
 
-    with open('util/request/flowise_request_format.json', 'rb') as file:
+    with open('util/request/agent_request_format.json', 'rb') as file:
         rf = file.read()
 
     js = json.loads(rf.decode('utf-8'))
@@ -100,16 +100,15 @@ def get_question(request_body):
 
 
 def query(body_data, question):
-    data = FlowiseRequestBody(
+    data = AgentRequestBody(
         question=str(question),
-        more=body_data.more,
-        chatId=body_data.chatId
-    ) if body_data.more else FlowiseRequestBody(
+        more=body_data.more
+    ) if body_data.more else AgentRequestBody(
         question=str(question),
     )
 
     response = requests.post(
-        FLOWISE_SERVER_API_URL,
+        AGENT_SERVER_API_URL,
         headers={"Content-Type": "application/json"},
         json=data.model_dump(exclude_none=True),
     )
