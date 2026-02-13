@@ -1,20 +1,31 @@
 import json
-import glob
+import os
 from pathlib import Path
-from typing import Optional
+from dotenv import load_dotenv
+from langsmith import traceable
 
 import uvicorn
 from fastapi import FastAPI
 from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from util.request.agent_request_body import AgentRequestBody
 from util.request.request_body import RequestBody
+
+# .env 파일 로드
+load_dotenv()
+
+# LangSmith 설정 확인
+print(f"🔍 LangSmith 설정 확인:")
+print(f"  LANGCHAIN_TRACING_V2: {os.getenv('LANGCHAIN_TRACING_V2')}")
+print(f"  LANGCHAIN_ENDPOINT: {os.getenv('LANGCHAIN_ENDPOINT')}")
+print(f"  LANGCHAIN_API_KEY: {'설정됨' if os.getenv('LANGCHAIN_API_KEY') else '없음'}")
+print(f"  LANGCHAIN_PROJECT: {os.getenv('LANGCHAIN_PROJECT')}\n")
 
 app = FastAPI()
 
@@ -93,11 +104,11 @@ def initialize_chain():
 위 정보를 참고하여, 사용자가 가진 재료로 만들 수 있는 건강한 레시피를 추천해주세요.
 
 **중요 규칙:**
-1. 사용자가 가진 재료를 최대한 활용하세요
-2. 건강에 좋은 레시피를 우선 추천하세요
-3. 레시피는 구체적으로 단계별로 설명하세요
+1. 사용자가 가진 재료를 활용한 레시피를 찾으세요
+2. 레시피 중 가장 많은 재료를 활용할 수 있는 레시피를 찾으세요
+3. 관련 레시피 정보에서 레시피를 찾을 수 없다면, 모른다고 하세요
 4. 재료가 부족하면 대체 재료를 제안하세요
-5. 저속노화 관점에서 주의할 점을 반드시 포함하세요
+5. 저속노화 관점에서 주의할 점을 포함하세요
 
 **반드시 아래 JSON 형식으로만 응답하세요 (다른 설명 없이 JSON만):**
 
@@ -105,7 +116,7 @@ def initialize_chain():
   "dishName": "음식 이름",
   "ingredients": ["재료1", "재료2", "재료3"],
   "recipe": "1. 첫번째 단계\\n2. 두번째 단계\\n3. 세번째 단계",
-  "recommendedIngredient": "(예: 당근, 브로콜리)",
+  "recommendedIngredient": "(예: 당근, 브로콜리를 추가할 수 있습니다.)",
   "warning": "(예: 혈당 관리, 염증 유발 성분 등)"
 }}]"""
 
@@ -116,13 +127,14 @@ def initialize_chain():
         return "\n\n".join(doc.page_content for doc in docs)
 
     recipe_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
     )
 
     print("✅ 체인 초기화 완료\n")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -130,9 +142,11 @@ async def startup_event():
     initialize_vector_store()
     initialize_chain()
 
+
 @app.get("/")
 def hello():
     return {"message": "Recipe Recommendation API with Vector DB"}
+
 
 def parse_recipe_response(output: str):
     """에이전트 응답에서 JSON 추출"""
@@ -152,6 +166,7 @@ def parse_recipe_response(output: str):
         return {"raw_answer": output}
 
 @app.post("/v1/request")
+@traceable(name="chat_ai_endpoint", run_type="chain")
 def chat_ai(request_body: AgentRequestBody):
     """사용자 질문에 대해 레시피 추천"""
     global recipe_chain
@@ -159,9 +174,9 @@ def chat_ai(request_body: AgentRequestBody):
     if recipe_chain is None:
         return {"error": "Recipe chain is not initialized"}
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"💬 질문: {request_body.question}")
-    print(f"{'='*50}\n")
+    print(f"{'=' * 50}\n")
 
     try:
         result = recipe_chain.invoke(request_body.question)
@@ -178,6 +193,7 @@ def chat_ai(request_body: AgentRequestBody):
         return {"error": str(e)}
 
 @app.post("/v1/recipe")
+@traceable(name="recommend_recipe_endpoint", run_type="chain")
 def recommend_recipe(request_body: RequestBody):
     """재료 기반 레시피 추천"""
     global recipe_chain
@@ -195,9 +211,9 @@ def recommend_recipe(request_body: RequestBody):
         exclude_str = ", ".join(request_body.excludeIngredients)
         question += f"\n단, 다음 재료는 사용하지 마세요: {exclude_str}"
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"💬 질문: {question}")
-    print(f"{'='*50}\n")
+    print(f"{'=' * 50}\n")
 
     try:
         result = recipe_chain.invoke(question)
@@ -212,6 +228,7 @@ def recommend_recipe(request_body: RequestBody):
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
         return {"error": str(e)}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080)
