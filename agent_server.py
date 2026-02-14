@@ -1,18 +1,18 @@
 import json
 import os
+import re
 from pathlib import Path
-from dotenv import load_dotenv
-from langsmith import traceable
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from langchain_community.document_loaders import TextLoader
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.tools import tool
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langgraph.prebuilt import create_react_agent
+from langsmith import traceable
 
 from util.request.agent_request_body import AgentRequestBody
 from util.request.request_body import RequestBody
@@ -32,6 +32,42 @@ app = FastAPI()
 # 전역 변수로 벡터 스토어 및 체인 저장
 vector_store = None
 recipe_chain = None
+
+@tool
+def compare_ingredients(user_ingredients: str, recipe_ingredients: str) -> str:
+    """
+    사용자가 가진 재료와 레시피에 필요한 재료를 비교하여 부족한 재료를 반환합니다.
+
+    Args:
+        user_ingredients: 사용자가 가진 재료 목록 (쉼표로 구분된 문자열, 예: "양파, 소시지, 토마토")
+        recipe_ingredients: 레시피에 필요한 재료 목록 (쉼표로 구분된 문자열, 예: "카레 가루, 순두부, 토마토 2개, 양파 1/2")
+
+    Returns:
+        부족한 재료를 쉼표로 구분한 문자열 (예: "카레 가루, 순두부")
+    """
+    def normalize_ingredient(ingredient: str) -> str:
+        """재료 이름에서 수량/단위 제거하고 정규화"""
+        # 숫자, 단위, 특수문자 제거
+        normalized = re.sub(r'[\d]+[./\d]*', '', ingredient)  # 숫자 제거
+        normalized = re.sub(r'[개모컵큰술작은술g㎖ml]', '', normalized)  # 단위 제거
+        normalized = normalized.strip().lower()
+        return normalized
+
+    # 문자열을 리스트로 변환
+    user_list = [ing.strip() for ing in user_ingredients.split(',')]
+    recipe_list = [ing.strip() for ing in recipe_ingredients.split(',')]
+
+    # 사용자 재료를 정규화
+    normalized_user = {normalize_ingredient(ing) for ing in user_list}
+
+    # 부족한 재료 찾기
+    missing_ingredients = []
+    for recipe_ing in recipe_list:
+        normalized_recipe = normalize_ingredient(recipe_ing)
+        if normalized_recipe and normalized_recipe not in normalized_user:
+            missing_ingredients.append(recipe_ing)
+
+    return ", ".join(missing_ingredients) if missing_ingredients else "모든 재료가 있습니다"
 
 def initialize_vector_store():
     """레시피 문서들을 로드하여 벡터 스토어 초기화"""
@@ -84,54 +120,79 @@ def initialize_chain():
 
     print("🤖 레시피 추천 체인 초기화 중...")
 
-    # Retriever 생성
+    # Retriever 생성 - 더 많은 레시피를 검색
     retriever = vector_store.as_retriever(
         search_type="similarity",
-        search_kwargs={"k": 5}
+        search_kwargs={"k": 10}
     )
 
     # LLM 설정
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-    # 프롬프트 템플릿
-    template = """당신은 건강한 레시피를 추천하는 전문가입니다.
-
-사용자 질문: {question}
-
-관련 레시피 정보:
-{context}
-
-위 정보를 참고하여, 사용자가 가진 재료로 만들 수 있는 건강한 레시피를 추천해주세요.
+    # 시스템 프롬프트
+    system_prompt = """당신은 레시피 데이터베이스에서 정확한 레시피를 찾아주는 전문가입니다.
 
 **중요 규칙:**
-1. 사용자가 가진 재료를 활용한 레시피를 찾으세요
-2. 레시피 중 가장 많은 재료를 활용할 수 있는 레시피를 찾으세요
-3. 관련 레시피 정보에서 레시피를 찾을 수 없다면, 모른다고 하세요
-4. 재료가 부족하면 대체 재료를 제안하세요
-5. 저속노화 관점에서 주의할 점을 포함하세요
+1. 데이터베이스의 레시피 정보에 있는 레시피만 사용하세요
+2. 절대로 레시피를 조합하거나 새로 만들지 마세요
+3. 사용자가 입력한 재료가 하나라도 포함된 레시피를 찾으세요
+4. 찾은 레시피의 음식 이름, 재료, 조리법을 데이터베이스에 있는 그대로 사용하세요
+5. 데이터베이스에 없는 레시피라면, 빈 배열 []을 반환하세요
+6. 저속노화 관점에서 주의할 점을 "warning"에 포함하세요
+
+**재료 비교 방법 (매우 중요!):**
+7. 반드시 compare_ingredients tool을 사용하여 부족한 재료를 찾으세요
+8. tool 사용 시:
+   - user_ingredients: 사용자가 가진 재료를 쉼표로 구분한 문자열 (예: "양파, 소시지, 토마토")
+   - recipe_ingredients: 선택한 레시피의 모든 재료를 쉼표로 구분한 문자열
+9. tool의 결과를 그대로 "recommendedIngredient"에 넣으세요
 
 **반드시 아래 JSON 형식으로만 응답하세요 (다른 설명 없이 JSON만):**
 
 [{{
-  "dishName": "음식 이름",
-  "ingredients": ["재료1", "재료2", "재료3"],
-  "recipe": "1. 첫번째 단계\\n2. 두번째 단계\\n3. 세번째 단계",
-  "recommendedIngredient": "(예: 당근, 브로콜리를 추가할 수 있습니다.)",
-  "warning": "(예: 혈당 관리, 염증 유발 성분 등)"
+  "dishName": "데이터베이스에 있는 정확한 음식 이름",
+  "ingredients": ["데이터베이스에 있는 정확한 재료 목록"],
+  "recipe": "데이터베이스에 있는 정확한 조리법",
+  "recommendedIngredient": "compare_ingredients tool의 결과",
+  "warning": "저속노화 관점의 주의사항"
 }}]"""
 
-    prompt = PromptTemplate.from_template(template)
-
-    # 체인 생성 - RAG 패턴 사용
+    # Agent 생성 - RAG와 Tool을 함께 사용
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
-    recipe_chain = (
-            {"context": retriever | format_docs, "question": RunnablePassthrough()}
-            | prompt
-            | llm
-            | StrOutputParser()
+    # Retriever를 tool로 만들기
+    @tool
+    def search_recipes(query: str) -> str:
+        """레시피 데이터베이스에서 관련 레시피를 검색합니다."""
+        docs = retriever.invoke(query)
+        return format_docs(docs)
+
+    # Agent 생성
+    agent = create_react_agent(
+        llm,
+        [search_recipes, compare_ingredients]
     )
+
+    # 시스템 프롬프트를 포함한 래퍼 함수
+    def recipe_chain_wrapper(input_data):
+        from langchain_core.messages import SystemMessage, HumanMessage
+
+        # 사용자 메시지 추출
+        if isinstance(input_data, dict) and "messages" in input_data:
+            user_msg = input_data["messages"][0][1]
+        else:
+            user_msg = input_data
+
+        # 시스템 메시지 + 사용자 메시지로 Agent 호출
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_msg)
+        ]
+
+        return agent.invoke({"messages": messages})
+
+    recipe_chain = recipe_chain_wrapper
 
     print("✅ 체인 초기화 완료\n")
 
@@ -179,8 +240,10 @@ def chat_ai(request_body: AgentRequestBody):
     print(f"{'=' * 50}\n")
 
     try:
-        result = recipe_chain.invoke(request_body.question)
-        parsed_answer = parse_recipe_response(result)
+        result = recipe_chain(request_body.question)
+        # Agent의 최종 메시지 추출
+        final_message = result["messages"][-1].content
+        parsed_answer = parse_recipe_response(final_message)
 
         response = {
             "answer": parsed_answer
@@ -190,6 +253,8 @@ def chat_ai(request_body: AgentRequestBody):
 
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 @app.post("/v1/recipe")
@@ -216,8 +281,10 @@ def recommend_recipe(request_body: RequestBody):
     print(f"{'=' * 50}\n")
 
     try:
-        result = recipe_chain.invoke(question)
-        parsed_answer = parse_recipe_response(result)
+        result = recipe_chain(question)
+        # Agent의 최종 메시지 추출
+        final_message = result["messages"][-1].content
+        parsed_answer = parse_recipe_response(final_message)
 
         response = {
             "answer": parsed_answer
@@ -227,6 +294,8 @@ def recommend_recipe(request_body: RequestBody):
 
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 
