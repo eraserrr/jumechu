@@ -85,10 +85,10 @@ def request(request_body: RequestBody):
 def get_question(request_body):
     li = request_body.ingredients
 
+    # For more=true requests, pass exclude ingredients as a list
+    # The agent server will build the question using session context
     if request_body.more:
-        with open('util/request/agent_request_additional_format.txt', 'r') as file:
-            rf2: str = file.read()
-            return rf2.replace('li', ",".join(request_body.excludeIngredients))
+        return {"excludeIngredients": request_body.excludeIngredients}
 
     with open('util/request/agent_request_format.json', 'rb') as file:
         rf = file.read()
@@ -102,9 +102,8 @@ def get_question(request_body):
 def query(body_data, question):
     data = AgentRequestBody(
         question=str(question),
-        more=body_data.more
-    ) if body_data.more else AgentRequestBody(
-        question=str(question),
+        more=body_data.more,
+        session_id=body_data.session_id
     )
 
     response = requests.post(

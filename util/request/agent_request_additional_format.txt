@@ -1,4 +1,18 @@
-이전 질문의 조건들을 동일하게 적용해서 다른 요리 더 추천해줘.
-
-대신 아래 재료들은 빼줬으면 좋갰어.
-[li]
+# This file is used as a template for building "more" requests with session memory.
+# The actual prompt is now dynamically built in agent_server.py's build_more_question() function.
+#
+# Format includes:
+# - Original ingredients from session memory
+# - New ingredient exclusions from current request
+# - Previously recommended recipe names to exclude
+#
+# Example generated prompt:
+# 이전 질문의 조건들을 동일하게 적용해서 다른 요리 더 추천해줘.
+#
+# 원래 재료: 양파, 소시지, 토마토
+#
+# 대신 아래 재료들은 빼줬으면 좋겠어:
+# 소시지
+#
+# 그리고 이미 추천한 요리는 제외해줘:
+# 소시지 토마토 볶음, 토마토 소시지 스튜

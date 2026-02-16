@@ -1,6 +1,8 @@
+import asyncio
 import json
 import os
 import re
+import time
 from pathlib import Path
 
 import uvicorn
@@ -16,6 +18,11 @@ from langsmith import traceable
 
 from util.request.agent_request_body import AgentRequestBody
 from util.request.request_body import RequestBody
+from util.memory.session_store import (
+    get_or_create_session,
+    update_session_recipes,
+    cleanup_expired_sessions
+)
 
 # .env 파일 로드
 load_dotenv()
@@ -197,11 +204,24 @@ def initialize_chain():
     print("✅ 체인 초기화 완료\n")
 
 
+async def log_session_stats():
+    """Periodic session statistics logging"""
+    from util.memory.session_store import session_memory
+    while True:
+        await asyncio.sleep(600)  # Every 10 minutes
+        print(f"📊 Active sessions: {len(session_memory)}")
+
 @app.on_event("startup")
 async def startup_event():
-    """서버 시작 시 벡터 스토어 및 체인 초기화"""
+    """서버 시작 시 벡터 스토어, 체인, 그리고 세션 정리 태스크 초기화"""
     initialize_vector_store()
     initialize_chain()
+    # Start background task for session cleanup
+    asyncio.create_task(cleanup_expired_sessions())
+    print("🧹 Session cleanup background task started")
+    # Start session statistics logging
+    asyncio.create_task(log_session_stats())
+    print("📊 Session statistics logging started")
 
 
 @app.get("/")
@@ -226,27 +246,115 @@ def parse_recipe_response(output: str):
         print(f"⚠️ JSON 파싱 실패: {e}")
         return {"raw_answer": output}
 
+
+def build_more_question(session_data: dict, exclude_ingredients: list) -> str:
+    """
+    Build question for more=true requests using session context.
+
+    Args:
+        session_data: Session dictionary with original_ingredients and recommended_recipes
+        exclude_ingredients: New ingredients to exclude from current request
+
+    Returns:
+        Formatted question string for agent
+    """
+    original_ingredients = ", ".join(session_data.get("original_ingredients", []))
+    recommended_recipes = session_data.get("recommended_recipes", [])
+
+    question = f"""이전 질문의 조건들을 동일하게 적용해서 다른 요리 더 추천해줘.
+
+원래 재료: {original_ingredients}"""
+
+    if exclude_ingredients:
+        exclude_str = ", ".join(exclude_ingredients)
+        question += f"""
+
+대신 아래 재료들은 빼줬으면 좋겠어:
+{exclude_str}"""
+
+    if recommended_recipes:
+        recipes_str = ", ".join(recommended_recipes)
+        question += f"""
+
+그리고 이미 추천한 요리는 제외해줘:
+{recipes_str}"""
+
+    return question
+
 @app.post("/v1/request")
 @traceable(name="chat_ai_endpoint", run_type="chain")
-def chat_ai(request_body: AgentRequestBody):
-    """사용자 질문에 대해 레시피 추천"""
+async def chat_ai(request_body: AgentRequestBody):
+    """사용자 질문에 대해 레시피 추천 (세션 메모리 지원)"""
     global recipe_chain
 
     if recipe_chain is None:
         return {"error": "Recipe chain is not initialized"}
 
+    # Session handling
+    session_id = request_body.session_id
+    session_data = None
+    question = request_body.question
+
+    if request_body.more:
+        # Retrieve or create session
+        session_id, session_data = get_or_create_session(session_id)
+
+        if not session_data.get("original_ingredients"):
+            # No previous context, treat as new request
+            print(f"⚠️ more=true but no session context for {session_id}, treating as new request")
+            # If question has ingredients, store them
+            if isinstance(question, dict) and "ingredients I have" in question:
+                ingredients = question["ingredients I have"]
+                session_data["original_ingredients"] = ingredients
+                session_data["last_accessed"] = time.time()
+        else:
+            # Build question with session context
+            exclude_ingredients = []
+            if isinstance(question, dict) and "excludeIngredients" in question:
+                exclude_ingredients = question["excludeIngredients"]
+
+            # Log session context
+            ingredient_count = len(session_data.get("original_ingredients", []))
+            excluded_recipe_count = len(session_data.get("recommended_recipes", []))
+            print(f"🔑 Session {session_id}: {ingredient_count} ingredients, {excluded_recipe_count} recipe exclusions")
+
+            if excluded_recipe_count > 0:
+                print(f"🚫 Excluding {excluded_recipe_count} previously recommended recipes")
+
+            question = build_more_question(session_data, exclude_ingredients)
+    else:
+        # New request: create/get session and store ingredients
+        ingredients = []
+        if isinstance(question, dict) and "ingredients I have" in question:
+            ingredients = question["ingredients I have"]
+
+        session_id, session_data = get_or_create_session(session_id, ingredients)
+
     print(f"\n{'=' * 50}")
-    print(f"💬 질문: {request_body.question}")
+    print(f"💬 질문: {question}")
+    print(f"🔑 Session ID: {session_id}")
     print(f"{'=' * 50}\n")
 
     try:
-        result = recipe_chain(request_body.question)
+        result = recipe_chain(question)
         # Agent의 최종 메시지 추출
         final_message = result["messages"][-1].content
         parsed_answer = parse_recipe_response(final_message)
 
+        # Update session with new recipes
+        if isinstance(parsed_answer, list):
+            new_recipes = []
+            for recipe in parsed_answer:
+                if "dishName" in recipe:
+                    new_recipes.append(recipe["dishName"])
+                else:
+                    print(f"⚠️ Recipe missing dishName field: {recipe}")
+            if new_recipes:
+                await update_session_recipes(session_id, new_recipes)
+
         response = {
-            "answer": parsed_answer
+            "answer": parsed_answer,
+            "session_id": session_id
         }
 
         return response
@@ -255,7 +363,7 @@ def chat_ai(request_body: AgentRequestBody):
         print(f"❌ 에러 발생: {e}")
         import traceback
         traceback.print_exc()
-        return {"error": str(e)}
+        return {"error": str(e), "session_id": session_id}
 
 @app.post("/v1/recipe")
 @traceable(name="recommend_recipe_endpoint", run_type="chain")
